@@ -1,0 +1,28 @@
+TIME_STEPS = 5
+# 头车 区块大小，区块间隔
+MAX_ACTION = 4
+MIN_ACTION = 0
+
+# 优化器参数
+ACTOR_LR = 1e-4
+CRITIC_LR = 1e-3
+WEIGHT_DECAY = 1e-4
+
+# 策略参数
+TAU = 0.005
+ALPHA = 0.05
+GAMMA = 0.95
+N_STEP = 3 # 计算n-step return
+PG_COEF = 1.
+
+# 训练参数
+EPOCH = 100
+STEP_PER_EPOCH = 100
+STEP_PER_COLLECT = 1000
+BUFFER_SIZE = 1000000
+BATCH_SIZE = 64
+
+TEST_NUM = 1
+TRAINING_NUM = 1
+
+SEED = 0
