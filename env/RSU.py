@@ -1,4 +1,4 @@
-import random
+from numpy import random
 
 from .block import Block
 from .vehicle import Vehicle
