@@ -69,9 +69,9 @@ def main(args=get_args()):
 
     # log
     time_now = datetime.now().strftime('%b%d-%H%M%S')
-    root = path.dirname(path.dirname(path.abspath(__file__)))
+    #root = path.dirname(path.dirname(path.abspath(__file__)))
     log_path = os.path.join(
-        root, args.logdir, args.log_prefix, args.task, "dqn", time_now)
+        "./log", "dqn"+time_now)
     print("Log path: ", log_path)
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))

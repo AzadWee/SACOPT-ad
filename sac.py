@@ -66,6 +66,8 @@ def main(args=get_args()):
     env, train_envs, test_envs = make_env(args.training_num, args.test_num)
     args.state_shape = env.observation_space.shape[0]
     args.action_shape = env.action_space.n
+    print(f'Shape of Observation Space: {args.state_shape}')
+    print(f'Shape of Action Space: {args.action_shape}')
 
     # seed
     np.random.seed(args.seed)
