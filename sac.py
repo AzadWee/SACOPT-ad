@@ -76,6 +76,7 @@ def main(args=get_args()):
     root = path.dirname(path.dirname(path.abspath(__file__)))
     log_path = os.path.join(
         root, args.logdir, args.log_prefix, args.task, 'sac', time_now)
+    print(f'Log Path: {log_path}')
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     logger = TensorboardLogger(writer)
