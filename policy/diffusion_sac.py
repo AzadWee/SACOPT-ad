@@ -117,7 +117,6 @@ class DiffusionSAC(BasePolicy):
         logits, hidden = model_(obs_), None
         dist = self._dist_fn(logits)
         acts = dist.sample() if self.training else logits.argmax(axis=-1)
-        print("logits: ", logits, "acts: ", acts)
         return Batch(logits=logits, act=acts, state=hidden, dist=dist)
 
     def _to_one_hot(

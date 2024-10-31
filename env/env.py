@@ -12,14 +12,13 @@ class OPTEnv(gym.Env):
         self._manager = Manager()
         self._observation_space = Box(shape=self.state.shape, low=0, high=1)
 
-        vehicle_id_space = Discrete(GOOD_VEHICLE_NUMBER + BED_VEHICLE_NUMBER)
         # block_size_space = Box(low=MIN_BLOCK_SIZE, high=MAX_BLOCK_SIZE, shape=(1,), dtype=float)
         # block_interval_space = Box(low=MIN_BLOCK_INTERVAL, high=MAX_BLOCK_INTERVAL, shape=(1,), dtype=float)
 
-        self._action_space = vehicle_id_space
+        self._action_space = Discrete(ACTION_SPACE)
 
         self._num_steps = 0
-        self.global_step = 0
+        self.global_clock = 0
         self._done = 0
 
     @property
@@ -41,9 +40,9 @@ class OPTEnv(gym.Env):
     def step(self, action):
         assert not self._done, "One episodic has terminated"
         # print('action:', action)
-        reward = self._manager.set(action, self.global_step)
+        reward = self._manager.set(action, self.global_clock)
         self._num_steps += 1
-        self.global_step += 1
+        self.global_clock += 1
         if self._num_steps >= MAX_STEP:
             self._done = 1
         info = {'num_steps': self._num_steps}

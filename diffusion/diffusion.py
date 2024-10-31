@@ -14,7 +14,7 @@ from .utils import Progress, Silent
 
 
 class Diffusion(nn.Module):
-    def __init__(self, state_dim, action_dim, model, max_action, min_action,
+    def __init__(self, state_dim, action_dim, model, max_action, 
                  beta_schedule='linear', n_timesteps=100,
                  loss_type='l1', clip_denoised=False, predict_epsilon=True):
         super(Diffusion, self).__init__()
@@ -22,7 +22,6 @@ class Diffusion(nn.Module):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.max_action = max_action
-        self.min_action = min_action
         self.model = model
 
         if beta_schedule == 'linear':
@@ -65,6 +64,7 @@ class Diffusion(nn.Module):
                              (1. - alphas_cumprod_prev) * np.sqrt(alphas) / (1. - alphas_cumprod))
 
         self.loss_fn = Losses[loss_type]()
+
 
     def predict_start_from_noise(self, x_t, t, noise):
         """

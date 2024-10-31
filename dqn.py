@@ -59,7 +59,7 @@ def get_args():
 
 def main(args=get_args()):
     # create environment
-    env, train_envs, test_envs = make_env(args.task, args.training_num, args.test_num)
+    env, train_envs, test_envs = make_env(args.training_num, args.test_num)
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
 

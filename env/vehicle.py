@@ -1,4 +1,4 @@
-from numpy import random
+import numpy as np
 from .config import *
 
 
@@ -17,9 +17,20 @@ class Vehicle:
         self.is_bad = is_bad   # 是否是恶意节点
         self.capacity = 10  # 计算能力
         self.transrate = 20  # 到rsu传输速率
-        self.reputation = 100  # 声誉
         self.block_chain = []
-
+    
+    @property
+    def norm_capacity(self):
+        return self.capacity / CAPACITY[-1]
+    
+    @property
+    def norm_transrate(self):
+        return self.transrate / TRANS_RATE[-1]
+    
+    @property
+    def vector(self):
+        return np.hstack([self.norm_capacity, self.norm_transrate])
+    
     def set_fov(self, is_fov):
         self.is_fov = is_fov
 
@@ -28,22 +39,12 @@ class Vehicle:
 
     def change_transrate(self, transrate):
         self.transrate = transrate
-
+    
     def generate_transaction(self):
-        size = random.randint(MIN_TRANSACTION_SIZE, MAX_TRANSACTION_SIZE)
+        random_number = np.random.normal(MEAN_TRANSACTION_SIZE, TRANSACTION_LAMMA)
+        size = int(np.clip(random_number, MIN_TRANSACTION_SIZE, MAX_TRANSACTION_SIZE))
 
-        if self.is_bad:
-            if random.random() < 0.9:
-                is_fake = True
-            else:
-                is_fake = False
-        else:
-            if random.random() <= 0.1:
-                is_fake = True
-            else:
-                is_fake = False
-
-        trans = Transaction(vid=self.vid, is_fake=is_fake, size=size)
+        trans = Transaction(vid=self.vid, is_fake=False, size=size)
         lantacy = size / self.capacity
 
         return trans, lantacy
@@ -54,6 +55,6 @@ class Vehicle:
     def reset(self):
         self.is_fov = False
         self.block_chain.clear()
-        self.capacity = random.choice(CAPACITY)  # 计算能力
-        self.transrate = random.choice(TRANS_RATE)  # 到rsu传输速率
+        self.capacity = np.random.choice(CAPACITY)  # 计算能力
+        self.transrate = np.random.choice(TRANS_RATE)  # 到rsu传输速率
         self.reputation = 100  # 声誉

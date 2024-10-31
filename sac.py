@@ -38,7 +38,7 @@ def get_args():
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[256, 256])
     parser.add_argument('--wd', type=float, default=1e-4)
     parser.add_argument('--gamma', type=float, default=0.95)
-    parser.add_argument('--n-step', type=int, default=3)
+    parser.add_argument('--n-step', type=int, default=1)
     parser.add_argument('--training-num', type=int, default=1)
     parser.add_argument('--test-num', type=int, default=1)
     parser.add_argument('--logdir', type=str, default='log')
@@ -51,7 +51,7 @@ def get_args():
     parser.add_argument('--watch', action="store_true", default=False)
 
     # for sac
-    parser.add_argument('--actor-lr', type=float, default=1e-4)
+    parser.add_argument('--actor-lr', type=float, default=1e-5)  # 1e-4
     parser.add_argument('--critic-lr', type=float, default=1e-3)
     parser.add_argument('--alpha-lr', type=float, default=3e-4)
     parser.add_argument('--tau', type=float, default=0.005)

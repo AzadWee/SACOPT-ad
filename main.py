@@ -32,7 +32,7 @@ from args import *
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--device', type=str, default='cpu')
+    parser.add_argument('-d', '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
 
     args = parser.parse_known_args()[0]
     return args
@@ -62,7 +62,7 @@ def main(args=get_args()):
         action_dim=action_shape,
         model=actor_net,
         max_action=MAX_ACTION,
-        min_action=MIN_ACTION,
+        beta_schedule='linear',
         n_timesteps=TIME_STEPS
     ).to(args.device)
     actor_optim = torch.optim.Adam(
@@ -86,6 +86,7 @@ def main(args=get_args()):
     time_now = datetime.now().strftime('%b%d-%H%M%S')
     log_path = os.path.join(
        "./log", time_now)
+    print(f'Log Path: {log_path}')
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     # visualize model graphs
@@ -140,7 +141,7 @@ def main(args=get_args()):
         env, _, _ = make_env()
         policy.eval()
         collector = Collector(policy, env)
-        result = collector.collect(n_episode=10, render=0.1)
+        result = collector.collect(n_episode=1, render=0.1)
         rews, lens = result["rews"], result["lens"]
         print(f'Mean Reward: {rews.mean}, Mean Length: {lens.mean}')
 

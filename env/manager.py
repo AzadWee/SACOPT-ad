@@ -54,12 +54,10 @@ class Manager:
     @property
     def space_vector(self):
         '''状态空间为车辆处理能力+传输时延+平均事务大小'''
-        vec = [v.capacity for v in self._good_vehicles]
-        vec += [v.capacity for v in self._bad_vehicles]
-        vec += [v.transrate for v in self._good_vehicles]
-        vec += [v.transrate for v in self._bad_vehicles]
-        vec += [r.transaction_size for r in self._rsu]
-        return np.array(vec)
+        vec = [v.vector for v in self._good_vehicles]
+        vec += [r.vector for r in self._rsu]
+        return np.hstack(vec)
+    
     def capacity_change(self):
         indices = {capacity: i for i, capacity in enumerate(CAPACITY)}
 
@@ -89,13 +87,21 @@ class Manager:
 
     def set(self, action, global_step):
         '''action包括头车选择，区块大小，区块间隔'''
-        # todo 目前仅针对1个rsu的情况
-        fov_id = action
-        # block_size = action[1]
-        # block_interval = action[2]
+        # action一维为fov，二维为区块大小，三维为区块间隔
+        fov_id = action // (BLOCK_SIZE_RANGE * BLOCK_INTERVAL_RANGE)
+        block_size = (action // BLOCK_INTERVAL_RANGE) % BLOCK_SIZE_RANGE + MIN_BLOCK_SIZE
+        block_interval = action % BLOCK_INTERVAL_RANGE + MIN_BLOCK_INTERVAL
+
+        # print("action:{},{},{}".format(fov_id, block_size, block_interval))
 
         assert fov_id < self._n_vehicle, \
             "FOV id should be less than the number of vehicles"
+        assert MIN_BLOCK_SIZE <= block_size <= MAX_BLOCK_SIZE, \
+            "Block size should be in the range of [{}, {}]".format(MIN_BLOCK_SIZE, MAX_BLOCK_SIZE)
+        assert MIN_BLOCK_INTERVAL <= block_interval <= MAX_BLOCK_INTERVAL, \
+            "Block interval should be in the range of [{}, {}]".format(MIN_BLOCK_INTERVAL, MAX_BLOCK_INTERVAL)
+
+        
 
         fov = None
         # 找到fovID对应的vehicle
@@ -103,33 +109,28 @@ class Manager:
             if v.vid == fov_id:
                 fov = v
                 break
-        if not fov:
-            for v in self._bad_vehicles:
-                if v.vid == fov_id:
-                    fov = v
-                    break
-        reward = 0
-        for r in self._rsu:
-            reward += r.operate(fov)
-
+        # if not fov:
+        #     for v in self._bad_vehicles:
+        #         if v.vid == fov_id:
+        #             fov = v
+        #             break
+        # reward = 0
+        # for r in self._rsu:
+        #     reward += r.operate(fov)
+        reward = self._rsu[0].operate(fov, block_size, block_interval)
 
         self.global_step += 1
 
-        if global_step < 5000:
-            if self.global_step % 10 == 0:
-                # self.transrate_change()
-                self.capacity_change()
-        else:
-            self._good_vehicles[0].change_capacity(100)
-            for v in self._good_vehicles[1:]:
-                v.change_capacity(10)
-        self.global_step += 1
+        if self.global_step % 2 == 0:
+            self.transrate_change()
+            self.capacity_change()
+        
+        # c=[]
+        # for v in self.good_vehicles:
+        #     c += [v.capacity]
+        # print(c)
 
-        if reward > self.best_reward:
-            self.best_reward = reward
-            return reward
-        else:
-            return np.random.normal(loc=self.best_reward, scale=2)
+        return reward
 
     def reset(self):
         for v in self._good_vehicles:
