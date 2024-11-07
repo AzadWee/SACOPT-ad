@@ -4,7 +4,7 @@ from tianshou.policy import BasePolicy
 from tianshou.data import Batch
 from typing import Any, Dict, List, Type, Optional, Union
 
-from env.config import NUM_SERVICE_PROVIDERS
+from env.config import ACTION_SPACE
 
 
 class RandomPolicy(BasePolicy):
@@ -45,7 +45,7 @@ class RandomPolicy(BasePolicy):
     ) -> Batch:
         """Compute action at random."""
 
-        logits, hidden = torch.rand((batch.obs.shape[0], NUM_SERVICE_PROVIDERS)), None
+        logits, hidden = torch.rand((batch.obs.shape[0], ACTION_SPACE)), None
 
         # convert to probability distribution
         if isinstance(logits, tuple):
@@ -54,6 +54,7 @@ class RandomPolicy(BasePolicy):
             dist = self.dist_fn(logits)
 
         # use deterministic policy
+        # 选择概率最大的动作
         if self.action_type == "discrete":
             act = logits.argmax(-1)
         elif self.action_type == "continuous":

@@ -16,3 +16,6 @@ diffusion 实现扩散模型
 
 policy 调用diffusion包实现diffusionSAC策略
 ```
+
+现在的训练效果
+![image](result/1.png)
