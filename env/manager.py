@@ -9,14 +9,10 @@ class Manager:
     def __init__(self):
         self._n_vehicle = GOOD_VEHICLE_NUMBER + BED_VEHICLE_NUMBER
         self._n_rsu = RSU_NUMBER
-        self._good_vehicles = [Vehicle(vid, 0, 0) for vid in range(GOOD_VEHICLE_NUMBER)]
-        self._bad_vehicles = [Vehicle(vid, 1, 0) for vid in range(GOOD_VEHICLE_NUMBER, self._n_vehicle)]
+        self._vehicles = [Vehicle(vid, 0, 0) for vid in range(GOOD_VEHICLE_NUMBER)]
         self._rsu = [RSU(rid) for rid in range(RSU_NUMBER)]
         for r in self._rsu:
-            for v in self._good_vehicles:
-                if v.rid == r.rid:
-                    r.add_vehicle(v)
-            for v in self._bad_vehicles:
+            for v in self._vehicles:
                 if v.rid == r.rid:
                     r.add_vehicle(v)
 
@@ -25,7 +21,7 @@ class Manager:
 
     @property
     def good_vehicles(self):
-        return self._good_vehicles
+        return self._vehicles
 
     @property
     def bad_vehicles(self):
@@ -53,20 +49,15 @@ class Manager:
 
     @property
     def space_vector(self):
-        '''状态空间为车辆处理能力+传输时延+平均事务大小'''
-        vec = [v.vector for v in self._good_vehicles]
+        '''状态空间为车辆处理能力+传输时延+平均事务大小+车辆数'''
+        vec = [v.vector for v in self._vehicles]
         vec += [r.vector for r in self._rsu]
         return np.hstack(vec)
     
     def capacity_change(self):
         indices = {capacity: i for i, capacity in enumerate(CAPACITY)}
 
-        for v in self._good_vehicles:
-            current_capacity = v.capacity
-            current_index = indices[current_capacity]
-            new_capacity = np.random.choice(CAPACITY, p=TRANSITION_MATRIX_1[current_index])
-            v.change_capacity(new_capacity)
-        for v in self._bad_vehicles:
+        for v in self._vehicles:
             current_capacity = v.capacity
             current_index = indices[current_capacity]
             new_capacity = np.random.choice(CAPACITY, p=TRANSITION_MATRIX_1[current_index])
@@ -74,12 +65,7 @@ class Manager:
 
     def transrate_change(self):
         indices = {rate: i for i, rate in enumerate(TRANS_RATE)}
-        for v in self._good_vehicles:
-            current_rate = v.transrate
-            current_index = indices[current_rate]
-            new_rate = np.random.choice(TRANS_RATE, p=TRANSITION_MATRIX_2[current_index])
-            v.change_transrate(new_rate)
-        for v in self._bad_vehicles:
+        for v in self._vehicles:
             current_rate = v.transrate
             current_index = indices[current_rate]
             new_rate = np.random.choice(TRANS_RATE, p=TRANSITION_MATRIX_2[current_index])
@@ -101,11 +87,9 @@ class Manager:
         assert MIN_BLOCK_INTERVAL <= block_interval <= MAX_BLOCK_INTERVAL, \
             "Block interval should be in the range of [{}, {}]".format(MIN_BLOCK_INTERVAL, MAX_BLOCK_INTERVAL)
 
-        
-
         fov = None
         # 找到fovID对应的vehicle
-        for v in self._good_vehicles:
+        for v in self._vehicles:
             if v.vid == fov_id:
                 fov = v
                 break
@@ -117,7 +101,7 @@ class Manager:
         # reward = 0
         # for r in self._rsu:
         #     reward += r.operate(fov)
-        reward = self._rsu[0].operate(fov, block_size, block_interval)
+        reward, throughput = self._rsu[0].operate(fov, block_size, block_interval)
 
         self.global_step += 1
 
@@ -130,10 +114,21 @@ class Manager:
         #     c += [v.capacity]
         # print(c)
 
-        return reward
+        return reward, throughput
+    
+    @property
+    def best_action(self):
+        '''最优动作为选择处理能力最大的车辆作为FOV，区块大小为最大值，区块间隔为最小值'''
+        max_capacity = 0
+        fov = None
+        for v in self._vehicles:
+            if v.capacity > max_capacity:
+                max_capacity = v.capacity
+                fov = v
+        return fov.vid * BLOCK_SIZE_RANGE * BLOCK_INTERVAL_RANGE
 
     def reset(self):
-        for v in self._good_vehicles:
+        for v in self._vehicles:
             v.reset()
         for v in self._bad_vehicles:
             v.reset()
@@ -141,4 +136,3 @@ class Manager:
             r.reset()
         self.global_step = 0
         return self.space_vector
-

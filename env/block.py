@@ -18,7 +18,3 @@ class Block:
     def add_transaction(self, transaction):
         self._transactions.append(transaction)
 
-
-
-
-

@@ -106,7 +106,7 @@ class RSU:
         reward = throughput * THROUGHPUT_COEF - (gen_latency + send_latency) * LATENCY_COEF - plently
         # print("reward:", reward, "throughput:", throughput, "latency:", gen_latency+send_latency)
 
-        return reward
+        return reward, throughput
 
     def operate(self, fov: Vehicle, block_size, block_interval):
         self.rsu_set_fov(fov)
@@ -125,8 +125,8 @@ class RSU:
             plently = len(self.transactions)
             self.transactions.clear()
 
-        reward = self.calculate_reward(block, gen_latency, send_latency, plently)
-        return reward
+        reward, throughput = self.calculate_reward(block, gen_latency, send_latency, plently)
+        return reward, throughput
 
     def reset(self):
         self._block_count = 0
