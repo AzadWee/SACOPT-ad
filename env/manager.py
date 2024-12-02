@@ -3,55 +3,37 @@ import numpy as np
 from .config import *
 from .vehicle import Vehicle
 from .RSU import RSU
+from .block import Block
 
 
 class Manager:
     def __init__(self):
-        self._n_vehicle = GOOD_VEHICLE_NUMBER + BED_VEHICLE_NUMBER
+        self._n_vehicle = VEHICLE_NUMBER
         self._n_rsu = RSU_NUMBER
-        self._vehicles = [Vehicle(vid, 0, 0) for vid in range(GOOD_VEHICLE_NUMBER)]
+        self._vehicles = [Vehicle(vid, vid // self._n_rsu) for vid in range(VEHICLE_NUMBER)]
+        self.global_chain = []
         self._rsu = [RSU(rid) for rid in range(RSU_NUMBER)]
         for r in self._rsu:
             for v in self._vehicles:
                 if v.rid == r.rid:
                     r.add_vehicle(v)
-
-        self.best_reward = 0
+        self.is_generate_mask = np.zeros(self._n_rsu) # 用于判断哪些分片生成区块
         self.global_step = 0
+        self.interval_factor = INTERVAL_FACTOR
 
     @property
     def good_vehicles(self):
         return self._vehicles
 
     @property
-    def bad_vehicles(self):
-        return self._bad_vehicles
-
-    @property
     def rsu(self):
         return self._rsu
 
-    # def step(self, action):
-    #     fov = action[0]
-    #     for r in self._rsu:
-    #         r.rsu_set_fov(r.vehicles[fov])
-    #     block_size = action[1]
-    #     for r in self._rsu:
-    #         r.set_block_size(block_size)
-    #     block_interval = action[2]
-    #     for r in self._rsu:
-    #         r.set_block_interval(block_interval)
-    #
-    #     for r in self._rsu:
-    #         lantacy = r.rsu_generate_transaction()
-    #         if lantacy:
-    #             r.generate_block()
-
     @property
     def space_vector(self):
-        '''状态空间为车辆处理能力+传输时延+平均事务大小+车辆数'''
+        '''状态空间为车辆处理能力+传输时延'''
         vec = [v.vector for v in self._vehicles]
-        vec += [r.vector for r in self._rsu]
+        # vec += [r.vector for r in self._rsu]
         return np.hstack(vec)
     
     def capacity_change(self):
@@ -70,9 +52,23 @@ class Manager:
             current_index = indices[current_rate]
             new_rate = np.random.choice(TRANS_RATE, p=TRANSITION_MATRIX_2[current_index])
             v.change_transrate(new_rate)
-
+    
+    def is_generate_block(self):
+        '''随机确定哪些分片生成区块，结果存储在is_generate_mask中，1表示生成区块，0表示不生成区块'''
+        is_vehicle_generate = np.random.randint(2, VEHICLE_NUMBER)
+        vehicle_ids = np.where(is_vehicle_generate == 1)[0]
+        self.is_generate_mask = np.zeros(self._n_rsu)
+        for vid in vehicle_ids:
+            self.is_generate_mask[self._vehicles[vid].rid] = 1
+    
+    def calculate_reward(self, throughput, delay, block_interval):        
+        if delay > self.interval_factor * block_interval:
+            return 0
+        else:
+            return throughput
+        
     def set(self, action, global_step):
-        '''action包括头车选择，区块大小，区块间隔'''
+        '''action包括头车选择,区块大小,区块间隔'''
         # action一维为fov，二维为区块大小，三维为区块间隔
         fov_id = action // (BLOCK_SIZE_RANGE * BLOCK_INTERVAL_RANGE)
         block_size = (action // BLOCK_INTERVAL_RANGE) % BLOCK_SIZE_RANGE + MIN_BLOCK_SIZE
@@ -93,26 +89,31 @@ class Manager:
             if v.vid == fov_id:
                 fov = v
                 break
-        # if not fov:
-        #     for v in self._bad_vehicles:
-        #         if v.vid == fov_id:
-        #             fov = v
-        #             break
-        # reward = 0
-        # for r in self._rsu:
-        #     reward += r.operate(fov)
-        reward, throughput = self._rsu[0].operate(fov, block_size, block_interval)
+        
+        # 随机生成is_generate_mask
+        self.is_generate_block()
+        
+        # 求每个分片中最大处理时间和最大共识时间
+        max_consensus_time = 0
+        max_process_time = 0
+        # 每个RSU(分片)进行操作
+        for r in self._rsu:
+            block, process_time, consensus_time = r.operate(fov, block_size, block_interval, self.is_generate_mask[r.rid])
+            max_consensus_time = max(max_consensus_time, consensus_time)
+            max_process_time = max(max_process_time, process_time)
+            if block:
+                self.global_chain.append(block)
+            
+        throughput = np.sum(self.is_generate_mask) * block_size / block_interval
+        total_delay = max_consensus_time + max_process_time
+        reward = self.calculate_reward(throughput, total_delay, block_interval)
 
         self.global_step += 1
 
+        # 每隔一段时间改变传输速率和处理能力
         if self.global_step % 2 == 0:
             self.transrate_change()
             self.capacity_change()
-        
-        # c=[]
-        # for v in self.good_vehicles:
-        #     c += [v.capacity]
-        # print(c)
 
         return reward, throughput
     
@@ -130,9 +131,9 @@ class Manager:
     def reset(self):
         for v in self._vehicles:
             v.reset()
-        for v in self._bad_vehicles:
-            v.reset()
         for r in self._rsu:
             r.reset()
+        self.global_chain.clear()
+        self.is_generate_mask = np.zeros(self._n_rsu)
         self.global_step = 0
         return self.space_vector

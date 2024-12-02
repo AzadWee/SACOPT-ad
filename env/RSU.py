@@ -11,7 +11,7 @@ class RSU:
         self._block_interval = 1
         self._block_size = 100
         self._block_count = 0
-        self.block_chain = []
+        self.local_chain = []
         self.vehicles = []
         self.fov = None
         self.transactions = []
@@ -53,85 +53,71 @@ class RSU:
         else:
             raise ValueError("FOV not in vehicles")
 
-    def rsu_generate_transaction(self):
+    def generate_block(self):
         if not self.fov:
             raise ValueError("FOV not set")
-        trans, lantacy = self.fov.generate_transaction()
+        lantacy = self.fov.generate_transaction()
         # self.reputation_control(trans)
         # self.transactions.append(trans)
-        return trans, lantacy
+        return lantacy
 
     def generate_block(self):
         self._block_count += 1
-        interval = 0
-        size = 0
         gen_latency = 0
-        new_block = Block()
-        # 车辆以柏松分布产生事务
-        transaction_num = int(np.random.poisson(MEAN_TRANSACTION_NUM))
-        for _ in range(transaction_num):
-            t, latency = self.rsu_generate_transaction()
-            self.transactions.append(t)
-            gen_latency += latency
-            if gen_latency > self._block_interval:
-                break
-        while size < self._block_size:
-            if not self.transactions:
-                break
-            t = self.transactions.pop(0)
-            size += t.size
-            new_block.add_transaction(t)
-        new_block.set_size(size)
-        # 向所属vehicle发送区块
-        send_latency = self.send_block(new_block)
+        
+        # 生成区块(打包)
+        new_block = Block(self._block_size)
+        gen_latency = self.fov.generate_block(new_block)
+        # 向所属vehicle发送区块（共识）
+        send_latency = self.consensus_block(new_block)
         # 返回生成和发送区块时延
         return new_block, gen_latency, send_latency
-    # fov向RSU发送区块
-    def send_block(self, block):
-        latency = block.size / self.fov.transrate
+    
+    # fov向RSU发送区块,返回值为共识时延
+    def consensus_block(self, block: Block):
         # 返回最长发送时延
+        latency = 0
+        for vehicle in self.vehicles:
+            if vehicle == self.fov:
+                continue
+            latency = max(latency, vehicle.upload_block(block))
         return latency
 
-    # todo 这东西还没完善,现在基本没用
-    # def reputation_control(self, trans):
-    #     if trans.is_fake:
-    #         self.fov.reputation -= 5
-    #     else:
-    #         self.fov.reputation += 3
 
-    def calculate_reward(self, block, gen_latency, send_latency, plently):
-        # throughput = len(block.transactions) / (gen_latency + send_latency)
-        throughput = len(block.transactions) / self._block_interval
+    def calculate_reward(self, block:Block, gen_latency, send_latency):
+        # 
+        if gen_latency + send_latency > self.interval_factor * self._block_interval:
+            return 0
+        throughput = block.size / self._block_interval
         # print("{},{},{},{}".format(throughput, plently, gen_latency, send_latency))
-        reward = throughput * THROUGHPUT_COEF - (gen_latency + send_latency) * LATENCY_COEF - plently
         # print("reward:", reward, "throughput:", throughput, "latency:", gen_latency+send_latency)
 
-        return reward, throughput
+        return throughput
 
-    def operate(self, fov: Vehicle, block_size, block_interval):
+    def operate(self, fov: Vehicle, block_size, block_interval, is_generate):
         self.rsu_set_fov(fov)
         self.set_block_size(block_size)
         self.set_block_interval(block_interval)
 
-        block, gen_latency, send_latency = self.generate_block()
-
-        if block.transactions:
-            self.transaction_mean_size = block.size / len(block.transactions)
-        self.block_chain.append(block)
-
-        # 当区块未容纳所有事务时，奖励为0
-        plently = 0
-        if self.transactions:
-            plently = len(self.transactions)
-            self.transactions.clear()
-
-        reward, throughput = self.calculate_reward(block, gen_latency, send_latency, plently)
-        return reward, throughput
+        # 头车生成新的区块
+        if is_generate:
+            # gen_latency为生成区块时延，send_latency为区块内共识时延
+            block, gen_latency, send_latency = self.generate_block()
+            # fov将区块上传到RSU，delivery_latency为上传时延
+            delivery_latency = self.fov.upload_block(block)
+            self.local_chain.append(block)
+        else:
+            block = None
+            gen_latency = 0
+            send_latency = 0
+            delivery_latency = 0
+        # reward = self.calculate_reward(block, gen_latency, send_latency)
+        process_time = gen_latency + delivery_latency
+        consensus_time = send_latency
+        return block, process_time, consensus_time
 
     def reset(self):
         self._block_count = 0
-        self.block_chain.clear()
+        self.local_chain.clear()
         self.fov = self.rsu_set_fov(np.random.choice(self.vehicles))
         self.transaction_mean_size = MIN_TRANSACTION_SIZE
-
-

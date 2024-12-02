@@ -1,5 +1,6 @@
 import numpy as np
 from .config import *
+from .block import Block
 
 
 class Transaction:
@@ -10,11 +11,10 @@ class Transaction:
 
 
 class Vehicle:
-    def __init__(self, vid, is_bad, rid):
+    def __init__(self, vid, rid):
         self.vid = vid
         self.rid = rid  # 车辆所属rsu
         self.is_fov = False    # 是否是头车
-        self.is_bad = is_bad   # 是否是恶意节点
         self.capacity = 10  # 计算能力
         self.transrate = 20  # 到rsu传输速率
         self.block_chain = []
@@ -40,17 +40,13 @@ class Vehicle:
     def change_transrate(self, transrate):
         self.transrate = transrate
     
-    def generate_transaction(self):
-        random_number = np.random.normal(MEAN_TRANSACTION_SIZE, TRANSACTION_LAMMA)
-        size = int(np.clip(random_number, MIN_TRANSACTION_SIZE, MAX_TRANSACTION_SIZE))
+    def generate_block(self, block: Block):
+        lantacy = block.size / self.capacity
+        return lantacy
 
-        trans = Transaction(vid=self.vid, is_fake=False, size=size)
-        lantacy = size / self.capacity
-
-        return trans, lantacy
-
-    def add_block(self, block):
-        self.block_chain.append(block)
+    def upload_block(self, block: Block):
+        lantacy = block.size / self.transrate
+        return lantacy
 
     def reset(self):
         self.is_fov = False
