@@ -31,7 +31,7 @@ class RSU:
     
     @property
     def vector(self):
-        return np.hstack([self.norm_transaction_size, len(self.vehicles)])
+        return np.hstack(([v.norm_capacity for v in self.vehicles], [v.norm_transrate for v in self.vehicles]))
     
     def set_block_size(self, block_size):
         self._block_size = block_size
@@ -44,22 +44,11 @@ class RSU:
             self.fov = vehicle
         self.vehicles.append(vehicle)
 
-    def rsu_set_fov(self, fov: Vehicle):
+    def rsu_set_fov(self, fov_id:int):
         if self.fov:
             self.fov.set_fov(False)
-        if fov in self.vehicles:
-            self.fov = fov
-            self.fov.set_fov(True)
-        else:
-            raise ValueError("FOV not in vehicles")
-
-    def generate_block(self):
-        if not self.fov:
-            raise ValueError("FOV not set")
-        lantacy = self.fov.generate_transaction()
-        # self.reputation_control(trans)
-        # self.transactions.append(trans)
-        return lantacy
+        self.fov = self.vehicles[fov_id]
+        self.fov.set_fov(True)
 
     def generate_block(self):
         self._block_count += 1
@@ -94,8 +83,11 @@ class RSU:
 
         return throughput
 
-    def operate(self, fov: Vehicle, block_size, block_interval, is_generate):
-        self.rsu_set_fov(fov)
+    def operate(self, fov_id:int, block_size:int, block_interval:int, is_generate:bool):
+        assert fov_id < len(self.vehicles), \
+            "FOV id should be less than the number of vehicles"
+        
+        self.rsu_set_fov(fov_id)
         self.set_block_size(block_size)
         self.set_block_interval(block_interval)
 
@@ -112,12 +104,11 @@ class RSU:
             send_latency = 0
             delivery_latency = 0
         # reward = self.calculate_reward(block, gen_latency, send_latency)
-        process_time = gen_latency + delivery_latency
-        consensus_time = send_latency
-        return block, process_time, consensus_time
+        delay = gen_latency + delivery_latency + send_latency
+        return block, delay
 
     def reset(self):
         self._block_count = 0
         self.local_chain.clear()
-        self.fov = self.rsu_set_fov(np.random.choice(self.vehicles))
+        self.fov = self.vehicles[0]
         self.transaction_mean_size = MIN_TRANSACTION_SIZE
