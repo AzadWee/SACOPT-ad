@@ -1,4 +1,3 @@
-
 class Block:
     def __init__(self, size=0):
         self._size = size
@@ -17,4 +16,8 @@ class Block:
 
     def add_transaction(self, transaction):
         self._transactions.append(transaction)
+    
+    def add_transactions(self, transactions: list):
+        for transaction in transactions:
+            self._transactions.append(transaction)
 

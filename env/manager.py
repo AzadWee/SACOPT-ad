@@ -23,7 +23,7 @@ class Manager:
         self.interval_factor = INTERVAL_FACTOR
 
     @property
-    def good_vehicles(self):
+    def vehicles(self):
         return self._vehicles
 
     @property
@@ -32,10 +32,13 @@ class Manager:
 
     @property
     def space_vector(self):
-        '''状态空间为车辆处理能力+传输时延'''
-        vec = self._rsu[0].vector
-        # vec += [r.vector for r in self._rsu]
+        '''状态空间为车辆处理能力+传输时延+事务平均大小+车辆数==12'''
+        vec = [v.vector for v in self._rsu[0].vehicles]
+        vec += [self._rsu[0].vector]
         return np.hstack(vec)
+    
+    def total_block_size(self):
+        return sum(block.size for block in self.global_chain)
     
     def capacity_change(self):
         indices = {capacity: i for i, capacity in enumerate(CAPACITY)}
@@ -69,11 +72,15 @@ class Manager:
             self.is_generate_mask[self._vehicles[vid].rid] = 1
             
     #todo: 奖励计算方法需要更改
-    def calculate_reward(self, throughput, delay, block_interval):        
-        if delay > self.interval_factor * block_interval:
-            return 0
-        else:
-            return throughput
+    def calculate_reward(self, throughput, delay, block_interval, plently):   
+            if delay > self.interval_factor * block_interval:
+                return 0
+            else: 
+                return throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently * PLENTLY_COEF
+    
+    def calculate_reward_old(self, throughput, delay, plently):
+        reward = throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently
+        return reward
         
     def set(self, action, global_step):
         '''action包括头车选择,区块大小,区块间隔'''
@@ -94,31 +101,40 @@ class Manager:
         # 随机生成is_generate_mask
         self.is_generate_block()
         
-        # 求每个分片中最大处理时间和最大共识时间
         
+        # 求每个分片中最大处理时间和最大共识时间
         max_delay = 0
+        sum_plenty = 0
         big_block = Block()
+    
         # 每个RSU(分片)进行操作
         for r in self._rsu:
-            block, delay = r.operate(fov_id, block_size, block_interval, self.is_generate_mask[r.rid])
+            block, delay, plenty = r.operate(fov_id, block_size, block_interval, self.is_generate_mask[r.rid])
             max_delay = max(max_delay, delay)
+            sum_plenty += plenty
             if block:
+                big_block.add_transactions(block.transactions)
                 big_block.set_size(big_block.size + block.size)
+                
         self.global_chain.append(big_block)
             
-        throughput = np.sum(self.is_generate_mask) * block_size / block_interval
-        # throughput = block_size / block_interval
-        reward = self.calculate_reward(throughput, max_delay, block_interval)
-        print("throughput:{}, delay:{}, interval{}, reward:{}".format(throughput, max_delay, block_interval, reward))
+        throughput = len(big_block.transactions) / block_interval
+        
+        # 抽一个rsu统计存储空间消耗
+        data_size = self._rsu[0].data_size
+        
+        reward = self.calculate_reward(throughput, max_delay, block_interval, sum_plenty)
+        # print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
 
         self.global_step += 1
 
         # 每隔一段时间改变传输速率和处理能力
-        if self.global_step % 5 == 0:
+        if self.global_step % 2 == 0:
             self.transrate_change()
             self.capacity_change()
-
-        return reward, throughput
+        
+        info = {'throughput': throughput, 'data_size': data_size,'delay': max_delay, 'plenty': sum_plenty}
+        return reward, info
     
     @property
     def best_action(self):

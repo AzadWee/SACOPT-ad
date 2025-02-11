@@ -12,10 +12,20 @@ class RSU:
         self._block_size = 100
         self._block_count = 0
         self.local_chain = []
+        self._data_size = 0
         self.vehicles = []
         self.fov = None
         self.transactions = []
-        self.transaction_mean_size = MIN_TRANSACTION_SIZE
+        
+        self.transaction_mean_size = MIN_TRANSACTION_SIZE  # rsu计算得到的事务平均大小，用于构建状态向量
+        
+        # 常量定义
+        self._mean_transaction_size = MEAN_TRANSACTION_SIZE
+        self._transaction_lamma = TRANSACTION_LAMMA
+        self._min_transaction_size = MIN_TRANSACTION_SIZE
+        self._max_transaction_size = MAX_TRANSACTION_SIZE
+        self._mean_transaction_num = MEAN_TRANSACTION_NUM
+        
 
     @property
     def block_interval(self):
@@ -27,11 +37,15 @@ class RSU:
 
     @property
     def norm_transaction_size(self):
-        return self.transaction_mean_size / MAX_TRANSACTION_SIZE
+        return self.transaction_mean_size / self._max_transaction_size
     
     @property
     def vector(self):
-        return np.hstack(([v.norm_capacity for v in self.vehicles], [v.norm_transrate for v in self.vehicles]))
+        return np.hstack([self.norm_transaction_size, len(self.vehicles)])
+    
+    @property
+    def data_size(self):
+        return self.data_size
     
     def set_block_size(self, block_size):
         self._block_size = block_size
@@ -49,18 +63,43 @@ class RSU:
             self.fov.set_fov(False)
         self.fov = self.vehicles[fov_id]
         self.fov.set_fov(True)
+    
+    # 统计区块链总大小
+    def total_block_size(self):
+        return sum(block.size for block in self.local_chain)
+    
+    def rsu_generate_transaction(self):
+        if not self.fov:
+            raise ValueError("FOV not set")
+        trans= self.fov.generate_transaction(self._mean_transaction_size, self._transaction_lamma, 
+                                                       self._min_transaction_size, self._max_transaction_size)
+        # self.reputation_control(trans)
+        # self.transactions.append(trans)
+        return trans
+    
 
     def generate_block(self):
         self._block_count += 1
+        size = 0
         gen_latency = 0
-        
-        # 生成区块(打包)
-        new_block = Block(self._block_size)
-        gen_latency = self.fov.generate_block(new_block)
-        # 向所属vehicle发送区块（共识）
-        send_latency = self.consensus_block(new_block)
+        new_block = Block()
+        # 车辆以柏松分布产生事务
+        transaction_num = int(np.random.poisson(self._mean_transaction_num))
+        for _ in range(transaction_num):
+            t = self.rsu_generate_transaction()
+            gen_latency += t.size / self.fov.capacity
+            self.transactions.append(t)
+            if gen_latency > self._block_interval:
+                break
+        while size < self._block_size:
+            if not self.transactions:
+                break
+            t = self.transactions.pop(0)
+            size += t.size
+            new_block.add_transaction(t)
+        new_block.set_size(size)
         # 返回生成和发送区块时延
-        return new_block, gen_latency, send_latency
+        return new_block, gen_latency
     
     # fov向RSU发送区块,返回值为共识时延
     def consensus_block(self, block: Block):
@@ -73,15 +112,14 @@ class RSU:
         return latency
 
 
-    def calculate_reward(self, block:Block, gen_latency, send_latency):
-        # 
-        if gen_latency + send_latency > self.interval_factor * self._block_interval:
-            return 0
-        throughput = block.size / self._block_interval
+    def calculate_reward(self, block, gen_latency, send_latency, plently):
+        # throughput = len(block.transactions) / (gen_latency + send_latency)
+        throughput = len(block.transactions) / self._block_interval
         # print("{},{},{},{}".format(throughput, plently, gen_latency, send_latency))
+        reward = throughput * THROUGHPUT_COEF - (gen_latency + send_latency) * LATENCY_COEF - plently
         # print("reward:", reward, "throughput:", throughput, "latency:", gen_latency+send_latency)
 
-        return throughput
+        return reward
 
     def operate(self, fov_id:int, block_size:int, block_interval:int, is_generate:bool):
         assert fov_id < len(self.vehicles), \
@@ -94,21 +132,34 @@ class RSU:
         # 头车生成新的区块
         if is_generate:
             # gen_latency为生成区块时延，send_latency为区块内共识时延
-            block, gen_latency, send_latency = self.generate_block()
+            block, gen_latency = self.generate_block()
             # fov将区块上传到RSU，delivery_latency为上传时延
             delivery_latency = self.fov.upload_block(block)
+            # 区块共识
+            consensus_latency = self.consensus_block(block)
+            if block.transactions:
+                self.transaction_mean_size = block.size / len(block.transactions)
             self.local_chain.append(block)
+            self.data_size += block.size
         else:
             block = None
             gen_latency = 0
-            send_latency = 0
+            consensus_latency = 0
             delivery_latency = 0
-        # reward = self.calculate_reward(block, gen_latency, send_latency)
-        delay = gen_latency + delivery_latency + send_latency
-        return block, delay
+         # 当区块未容纳所有事务时，奖励为0
+        plently = 0
+        if self.transactions:
+            plently = len(self.transactions)
+            self.transactions.clear()
+        # reward = self.calculate_reward(block, gen_latency, delivery_latency, plently)
+        delay = gen_latency + delivery_latency #+ consensus_latency
+        # return block, delay, plently
+        return block, delay, plently
 
     def reset(self):
         self._block_count = 0
+        self.data_size = 0
         self.local_chain.clear()
-        self.fov = self.vehicles[0]
-        self.transaction_mean_size = MIN_TRANSACTION_SIZE
+        self.fov = self.rsu_set_fov(np.random.choice(range(len(self.vehicles))))
+        self.transaction_mean_size = self._min_transaction_size
+

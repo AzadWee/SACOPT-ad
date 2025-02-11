@@ -40,6 +40,14 @@ class Vehicle:
     def change_transrate(self, transrate):
         self.transrate = transrate
     
+    def generate_transaction(self,t_size, t_lamma, min_size, max_size):
+        random_number = np.random.normal(t_size, t_lamma)
+        size = int(np.clip(random_number, min_size, max_size))
+
+        trans = Transaction(vid=self.vid, is_fake=False, size=size)
+
+        return trans
+    
     def generate_block(self, block: Block):
         lantacy = block.size / self.capacity
         return lantacy
