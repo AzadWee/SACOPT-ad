@@ -78,7 +78,7 @@ class Manager:
             else: 
                 return throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently * PLENTLY_COEF
     
-    def calculate_reward_old(self, throughput, delay, plently):
+    def calculate_reward_old(self, throughput, delay, block_interval, plently):
         reward = throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently
         return reward
         
@@ -123,7 +123,7 @@ class Manager:
         # 抽一个rsu统计存储空间消耗
         data_size = self._rsu[0].data_size
         
-        reward = self.calculate_reward(throughput, max_delay, block_interval, sum_plenty)
+        reward = self.calculate_reward_old(throughput, max_delay, block_interval, sum_plenty)
         # print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
 
         self.global_step += 1

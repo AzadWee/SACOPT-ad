@@ -45,7 +45,7 @@ class RSU:
     
     @property
     def data_size(self):
-        return self.data_size
+        return self._data_size
     
     def set_block_size(self, block_size):
         self._block_size = block_size
@@ -110,6 +110,26 @@ class RSU:
                 continue
             latency = max(latency, vehicle.upload_block(block))
         return latency
+    
+    def pbft(self, block: Block):
+        self.fov.pre_prepare(self.vehicles)
+        
+        for vehicle in self.vehicles:
+            if vehicle != self.fov:
+                vehicle.prepare(self.vehicles, self.fov.view_id)
+        
+        for vehicle in self.vehicles:
+            vehicle.commit(self.vehicles, self.fov.view_id)
+        latency = 0
+        for vehicle in self.vehicles:
+            if vehicle.check_consensus(self.fov.view_id, (len(self.vehicles)-1) // 3):
+                latency = self.consensus_block(block)
+                self.local_chain.append(block)
+                break
+        return latency
+        
+                
+        
 
 
     def calculate_reward(self, block, gen_latency, send_latency, plently):
@@ -133,14 +153,15 @@ class RSU:
         if is_generate:
             # gen_latency为生成区块时延，send_latency为区块内共识时延
             block, gen_latency = self.generate_block()
-            # fov将区块上传到RSU，delivery_latency为上传时延
+            # fov将区块上传到RSU开始共识过程，delivery_latency为上传时延
             delivery_latency = self.fov.upload_block(block)
             # 区块共识
-            consensus_latency = self.consensus_block(block)
+            consensus_latency = self.pbft(block)
+            assert consensus_latency > 0, "Consensus Failed"
+            
             if block.transactions:
                 self.transaction_mean_size = block.size / len(block.transactions)
-            self.local_chain.append(block)
-            self.data_size += block.size
+            self._data_size += block.size
         else:
             block = None
             gen_latency = 0
@@ -152,13 +173,13 @@ class RSU:
             plently = len(self.transactions)
             self.transactions.clear()
         # reward = self.calculate_reward(block, gen_latency, delivery_latency, plently)
-        delay = gen_latency + delivery_latency #+ consensus_latency
+        delay = gen_latency + delivery_latency + consensus_latency
         # return block, delay, plently
         return block, delay, plently
 
     def reset(self):
         self._block_count = 0
-        self.data_size = 0
+        self._data_size = 0
         self.local_chain.clear()
         self.fov = self.rsu_set_fov(np.random.choice(range(len(self.vehicles))))
         self.transaction_mean_size = self._min_transaction_size
