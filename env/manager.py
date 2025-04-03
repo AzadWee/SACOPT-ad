@@ -12,6 +12,10 @@ class Manager:
         self._n_rsu = RSU_NUMBER
         self._n_shard = VEHICLE_NUMBER // RSU_NUMBER
         self._vehicles = [Vehicle(vid, vid // self._n_shard) for vid in range(VEHICLE_NUMBER)]
+        
+        # 添加一个恶意节点
+        self._vehicles[2].set_bad(True)
+        
         self.global_chain = []
         self._rsu = [RSU(rid) for rid in range(RSU_NUMBER)]
         for r in self._rsu:
@@ -21,6 +25,9 @@ class Manager:
         self.is_generate_mask = np.zeros(self._n_rsu) # 用于判断哪些分片生成区块
         self.global_step = 0
         self.interval_factor = INTERVAL_FACTOR
+        
+        # 运行记录
+        self.bad_count = 0
 
     @property
     def vehicles(self):
@@ -79,6 +86,13 @@ class Manager:
                 return throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently * PLENTLY_COEF
     
     def calculate_reward_old(self, throughput, delay, block_interval, plently):
+        fovs = [r.fov for r in self._rsu]
+        # fovs中存在恶意节点，奖励为0
+        if any(fov.is_bad for fov in fovs):
+            # self.bad_count += 1
+            return -500
+        if self.rsu[0].fov == self.vehicles[1]:
+            self.bad_count += 1
         reward = throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently
         return reward
         
@@ -133,7 +147,7 @@ class Manager:
             self.transrate_change()
             self.capacity_change()
         
-        info = {'throughput': throughput, 'data_size': data_size,'delay': max_delay, 'plenty': sum_plenty}
+        info = {'throughput': throughput, 'data_size': data_size,'delay': max_delay, 'plenty': sum_plenty, 'bad_count': self.bad_count}
         return reward, info
     
     @property
@@ -155,4 +169,5 @@ class Manager:
         self.global_chain.clear()
         self.is_generate_mask = np.zeros(self._n_rsu)
         self.global_step = 0
+        self.bad_count = 0
         return self.space_vector

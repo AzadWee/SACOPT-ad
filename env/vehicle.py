@@ -23,6 +23,9 @@ class Vehicle:
         self.energy = 0  # 能量
         self.block_chain = []
         
+        # 安全相关
+        self.is_bad = False
+        
         # 共识相关
         self.messages = {}
         self.view_id = 0
@@ -45,6 +48,9 @@ class Vehicle:
     
     def set_fov(self, is_fov):
         self.is_fov = is_fov
+    
+    def set_bad(self, is_bad):
+        self.is_bad = is_bad
 
     def change_capacity(self, capacity):
         self.capacity = capacity
@@ -53,6 +59,8 @@ class Vehicle:
         self.transrate = transrate
     
     def generate_transaction(self,t_size, t_lamma, min_size, max_size):
+        
+        # 正态分布随机生成事务大小
         random_number = np.random.normal(t_size, t_lamma)
         size = int(np.clip(random_number, min_size, max_size))
 

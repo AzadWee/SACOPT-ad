@@ -26,6 +26,7 @@ class OPTEnv(gym.Env):
         self.plenty_records = []
         self.delay_records = []
         self.data_size_records = []
+        self.bad_count_record = 0
 
     @property
     def state(self):
@@ -51,6 +52,7 @@ class OPTEnv(gym.Env):
         self.delay_records.append(manage_info['delay'])
         self.plenty_records.append(manage_info['plenty'])
         self.data_size_records.append(manage_info['data_size'])
+        self.bad_count_record = manage_info['bad_count']
         
         self._num_steps += 1
         self.global_clock += 1
@@ -69,6 +71,7 @@ class OPTEnv(gym.Env):
         self.plenty_records = []
         self.delay_records = []
         self.data_size_records = []
+        self.bad_count_record = 0
         return self.state
 
     def seed(self, seed=None):
@@ -81,7 +84,7 @@ class OPTEnv(gym.Env):
         with open(filename, mode='a+', newline='') as file:
             writer = csv.writer(file)
             if not file_exists:
-                writer.writerow(['throughput', 'delay', 'plenty', 'data_size'])
+                writer.writerow(['throughput', 'delay', 'plenty', 'data_size', 'bad_count'])
             if self.throughput_records:
                 mean_throughput = sum(self.throughput_records) / len(self.throughput_records)
             if self.plenty_records:
@@ -92,7 +95,7 @@ class OPTEnv(gym.Env):
                 mean_data_size = sum(self.data_size_records) / len(self.data_size_records)
             
             if mean_throughput:
-                writer.writerow([mean_throughput, mean_delay, mean_plenty, mean_data_size])
+                writer.writerow([mean_throughput, mean_delay, mean_plenty, mean_data_size, self.bad_count_record])
 
 
 def make_env(training_num=0, test_num=0, save=False):
