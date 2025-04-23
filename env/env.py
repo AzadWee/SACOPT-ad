@@ -10,7 +10,7 @@ from .config import *
 
 class OPTEnv(gym.Env):
 
-    def __init__(self, is_save):
+    def __init__(self, is_save:bool, is_test:bool):
         self._manager = Manager()
         self._observation_space = Box(shape=self.state.shape, low=0, high=1)
 
@@ -18,7 +18,7 @@ class OPTEnv(gym.Env):
         # block_interval_space = Box(low=MIN_BLOCK_INTERVAL, high=MAX_BLOCK_INTERVAL, shape=(1,), dtype=float)
 
         self._action_space = Discrete(ACTION_SPACE)
-        self.is_save = is_save
+        
         self._num_steps = 0
         self.global_clock = 0
         self._done = 0
@@ -28,6 +28,9 @@ class OPTEnv(gym.Env):
         self.data_size_records = []
         self.bad_count_record = 0
 
+        # 配置相关
+        self.is_save = is_save
+        self.is_test = is_test
     @property
     def state(self):
         return self._manager.space_vector
@@ -65,7 +68,7 @@ class OPTEnv(gym.Env):
         self._manager.reset()
         self._num_steps = 0
         self._done = 0
-        if self.is_save:
+        if self.is_save and self.is_test:
             self.save_to_csv()
         self.throughput_records = []
         self.plenty_records = []
@@ -99,15 +102,15 @@ class OPTEnv(gym.Env):
 
 
 def make_env(training_num=0, test_num=0, save=False):
-    env = OPTEnv(save)
+    env = OPTEnv(save, False)
     env.seed(SEED)
     train_envs, test_envs = None, None
     if training_num:
-        train_envs = DummyVectorEnv([lambda:OPTEnv(save) for _ in range(training_num)])
+        train_envs = DummyVectorEnv([lambda:OPTEnv(save, False) for _ in range(training_num)])
         train_envs.seed(SEED)
 
     if test_num:
-        test_envs = DummyVectorEnv([lambda:OPTEnv(save) for _ in range(test_num)])
+        test_envs = DummyVectorEnv([lambda:OPTEnv(save, True) for _ in range(test_num)])
         test_envs.seed(SEED)
 
     return env, train_envs, test_envs

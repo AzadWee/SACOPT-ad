@@ -88,9 +88,9 @@ class Manager:
     def calculate_reward_old(self, throughput, delay, block_interval, plently):
         fovs = [r.fov for r in self._rsu]
         # fovs中存在恶意节点，奖励为0
-        if any(fov.is_bad for fov in fovs):
-            # self.bad_count += 1
-            return -500
+        # if any(fov.is_bad for fov in fovs):
+        #     # self.bad_count += 1
+        #     return -500
         if self.rsu[0].fov == self.vehicles[1]:
             self.bad_count += 1
         reward = throughput * THROUGHPUT_COEF - delay * LATENCY_COEF - plently
@@ -114,7 +114,6 @@ class Manager:
         
         # 随机生成is_generate_mask
         self.is_generate_block()
-        
         
         # 求每个分片中最大处理时间和最大共识时间
         max_delay = 0

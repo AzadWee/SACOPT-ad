@@ -33,13 +33,14 @@ from args import *
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('-s', '--save', type=bool, default=False)
 
     args = parser.parse_known_args()[0]
     return args
 
 
 def main(args=get_args()):
-    env, train_envs, test_envs = make_env(TRAINING_NUM, TEST_NUM)
+    env, train_envs, test_envs = make_env(TRAINING_NUM, TEST_NUM, args.save)
     state_shape = env.observation_space.shape[0]
     action_shape = env.action_space.n
     print(f'Shape of Observation Space: {state_shape}')
