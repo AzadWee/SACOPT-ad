@@ -18,6 +18,7 @@ class Manager:
         
         self.global_chain = []
         self._rsu = [RSU(rid) for rid in range(RSU_NUMBER)]
+        # 将车辆分配到RSU
         for r in self._rsu:
             for v in self._vehicles:
                 if v.rid == r.rid:
@@ -114,6 +115,7 @@ class Manager:
         
         # 随机生成is_generate_mask
         self.is_generate_block()
+        is_generate_vehicle = np.random.randint(2, size=self._n_vehicle)
         
         # 求每个分片中最大处理时间和最大共识时间
         max_delay = 0
@@ -122,12 +124,13 @@ class Manager:
     
         # 每个RSU(分片)进行操作
         for r in self._rsu:
-            block, delay, plenty = r.operate(fov_id, block_size, block_interval, self.is_generate_mask[r.rid])
+            block, cblock, delay, plenty = r.operate(fov_id, block_size, block_interval, is_generate_vehicle)
             max_delay = max(max_delay, delay)
             sum_plenty += plenty
             if block:
                 big_block.add_transactions(block.transactions)
-                big_block.set_size(big_block.size + block.size)
+                big_block.add_transactions(cblock.transactions)
+                big_block.set_size(big_block.size + block.size + cblock.size)
                 
         self.global_chain.append(big_block)
             
@@ -137,7 +140,7 @@ class Manager:
         data_size = self._rsu[0].data_size
         
         reward = self.calculate_reward_old(throughput, max_delay, block_interval, sum_plenty)
-        # print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
+        print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
 
         self.global_step += 1
 

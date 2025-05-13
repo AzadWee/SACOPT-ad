@@ -4,10 +4,11 @@ from .block import Block
 
 
 class Transaction:
-    def __init__(self, vid, is_fake=0, size=1):
+    def __init__(self, vid:int, input:list, is_fake=0, size=1):
         self.vid = vid
         self.is_fake = is_fake
         self.size = size
+        self.input = input
 
 
 class Vehicle:
@@ -20,7 +21,12 @@ class Vehicle:
         self.is_fov = False    # 是否是头车
         self.capacity = 10  # 计算能力
         self.transrate = 20  # 到rsu传输速率
-        self.energy = 0  # 能量
+
+        # 能耗相关
+        self.energyConsumption = 0
+
+        # 安全相关
+        self.reputation = 0  # 信誉
         self.block_chain = []
         
         # 安全相关
@@ -58,22 +64,28 @@ class Vehicle:
     def change_transrate(self, transrate):
         self.transrate = transrate
     
-    def generate_transaction(self,t_size, t_lamma, min_size, max_size):
+    def generate_transaction(self,t_size, t_lamma, min_size, max_size, isCrossShard=False, input=None):
         
         # 正态分布随机生成事务大小
         random_number = np.random.normal(t_size, t_lamma)
         size = int(np.clip(random_number, min_size, max_size))
-
-        trans = Transaction(vid=self.vid, is_fake=False, size=size)
+        if isCrossShard:
+            trans = Transaction(vid=self.vid, input=input, is_fake=False, size=size)
+        else:
+            trans = Transaction(vid=self.vid, input=[self.rid], is_fake=False, size=size)
 
         return trans
     
     def generate_block(self, block: Block):
         lantacy = block.size / self.capacity
+        # 计算能耗
+        self.energyConsumption += block.size * 0.3
         return lantacy
 
-    def upload_block(self, block: Block):
-        lantacy = block.size / self.transrate
+    def upload_block(self, block: Block, cblock: Block):
+        lantacy = (block.size + cblock.size) / self.transrate
+        # 计算能耗
+        self.energyConsumption += (block.size + cblock.size) * 0.1
         return lantacy
     
     # 共识相关

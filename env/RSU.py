@@ -15,7 +15,9 @@ class RSU:
         self._data_size = 0
         self.vehicles = []
         self.fov = None
+
         self.transactions = []
+        self.crossShardTransactions = []
         
         self.transaction_mean_size = MIN_TRANSACTION_SIZE  # rsu计算得到的事务平均大小，用于构建状态向量
         
@@ -68,29 +70,40 @@ class RSU:
     def total_block_size(self):
         return sum(block.size for block in self.local_chain)
     
-    def rsu_generate_transaction(self):
+    def rsu_generate_transaction(self, is_generate_vehicle):
         if not self.fov:
             raise ValueError("FOV not set")
-        trans= self.fov.generate_transaction(self._mean_transaction_size, self._transaction_lamma, 
-                                                       self._min_transaction_size, self._max_transaction_size)
+        for vehicle in self.vehicles:
+            if is_generate_vehicle[vehicle.vid]:
+                transaction_num = np.random.randint(1, 10)
+                for _ in range(transaction_num):
+                    # 0.1概率生成跨分片事务
+                    if np.random.rand() < 0.1:
+                        randomRid = np.random.randint(0, RSU_NUMBER)
+                        while randomRid == self.rid:
+                            randomRid = np.random.randint(0, RSU_NUMBER)
+                        input = [vehicle.rid, randomRid]
+                        t = vehicle.generate_transaction(self._mean_transaction_size, self._transaction_lamma,
+                                                            self._min_transaction_size, self._max_transaction_size, True, input)
+                        # gen_latency += t.size / self.fov.capacity
+                        self.crossShardTransactions.append(t)
+                    # 0.9概率生成本分片事务
+                    else:
+                        t = vehicle.generate_transaction(self._mean_transaction_size, self._transaction_lamma,
+                                                            self._min_transaction_size, self._max_transaction_size)
+                        # gen_latency += t.size / self.fov.capacity
+                        self.transactions.append(t)
+                        # if gen_latency > self._block_interval:
+                        #     break
         # self.reputation_control(trans)
         # self.transactions.append(trans)
-        return trans
     
-
     def generate_block(self):
-        self._block_count += 1
-        size = 0
+        size = 5
         gen_latency = 0
         new_block = Block()
-        # 车辆以柏松分布产生事务
-        transaction_num = int(np.random.poisson(self._mean_transaction_num))
-        for _ in range(transaction_num):
-            t = self.rsu_generate_transaction()
-            gen_latency += t.size / self.fov.capacity
-            self.transactions.append(t)
-            if gen_latency > self._block_interval:
-                break
+       
+        # 头车打包事物形成区块
         while size < self._block_size:
             if not self.transactions:
                 break
@@ -98,20 +111,39 @@ class RSU:
             size += t.size
             new_block.add_transaction(t)
         new_block.set_size(size)
+        gen_latency = size / self.fov.capacity
         # 返回生成和发送区块时延
         return new_block, gen_latency
     
+    def generateCrossShardBlock(self):
+        size = 0
+        gen_latency = 0
+        new_block = Block()
+       
+        # 头车打包事物形成区块
+        while size < self._block_size:
+            if not self.crossShardTransactions:
+                break
+            t = self.crossShardTransactions.pop(0)
+            size += t.size
+            new_block.add_transaction(t)
+        new_block.set_size(size)
+        gen_latency = size / self.fov.capacity
+        # 返回生成和发送区块时延
+        return new_block, gen_latency
+    
+
     # fov向RSU发送区块,返回值为共识时延
-    def consensus_block(self, block: Block):
+    def consensus_block(self, block: Block, cblock: Block):
         # 返回最长发送时延
         latency = 0
         for vehicle in self.vehicles:
             if vehicle == self.fov:
                 continue
-            latency = max(latency, vehicle.upload_block(block))
+            latency = max(latency, vehicle.upload_block(block, cblock))
         return latency
     
-    def pbft(self, block: Block):
+    def pbft(self, block: Block, cblock: Block):
         self.fov.pre_prepare(self.vehicles)
         
         for vehicle in self.vehicles:
@@ -123,8 +155,12 @@ class RSU:
         latency = 0
         for vehicle in self.vehicles:
             if vehicle.check_consensus(self.fov.view_id, (len(self.vehicles)-1) // 3):
-                latency = self.consensus_block(block)
+                latency = self.consensus_block(block, cblock)
                 self.local_chain.append(block)
+                self._block_count += 1
+                if cblock.size > 0:
+                    self.local_chain.append(cblock)
+                    self._block_count += 1
                 break
         return latency
         
@@ -141,7 +177,7 @@ class RSU:
 
         return reward
 
-    def operate(self, fov_id:int, block_size:int, block_interval:int, is_generate:bool):
+    def operate(self, fov_id:int, block_size:int, block_interval:int, is_generate_vehicle):
         assert fov_id < len(self.vehicles), \
             "FOV id should be less than the number of vehicles"
         
@@ -149,33 +185,36 @@ class RSU:
         self.set_block_size(block_size)
         self.set_block_interval(block_interval)
 
+        # 车辆产生交易进入交易池
+        self.rsu_generate_transaction(is_generate_vehicle)
+
         # 头车生成新的区块
-        if is_generate:
-            # gen_latency为生成区块时延，send_latency为区块内共识时延
-            block, gen_latency = self.generate_block()
-            # fov将区块上传到RSU开始共识过程，delivery_latency为上传时延
-            delivery_latency = self.fov.upload_block(block)
-            # 区块共识
-            consensus_latency = self.pbft(block)
-            assert consensus_latency > 0, "Consensus Failed"
+        # gen_latency为生成区块时延，send_latency为区块内共识时延
+        block, gen_latency = self.generate_block()
+        # 头车生成新的跨分片区块
+        cblock, cgen_latency = self.generateCrossShardBlock()
             
-            if block.transactions:
-                self.transaction_mean_size = block.size / len(block.transactions)
-            self._data_size += block.size
-        else:
-            block = None
-            gen_latency = 0
-            consensus_latency = 0
-            delivery_latency = 0
+
+        # fov将区块上传到RSU开始共识过程，delivery_latency为上传时延
+        delivery_latency = self.fov.upload_block(block, cblock)
+
+        # 区块共识
+
+        consensus_latency = self.pbft(block, cblock)
+        assert consensus_latency >= 0, "Consensus Failed"
+        
+        if block.transactions:
+            self.transaction_mean_size = block.size / len(block.transactions)
+        self._data_size += block.size
          # 当区块未容纳所有事务时，奖励为0
         plently = 0
         if self.transactions:
             plently = len(self.transactions)
             self.transactions.clear()
         # reward = self.calculate_reward(block, gen_latency, delivery_latency, plently)
-        delay = gen_latency + delivery_latency + consensus_latency
+        delay = gen_latency + cgen_latency + delivery_latency + consensus_latency
         # return block, delay, plently
-        return block, delay, plently
+        return block, cblock, delay, plently
 
     def reset(self):
         self._block_count = 0
