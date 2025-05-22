@@ -80,8 +80,8 @@ class RSU:
                     # 0.1概率生成跨分片事务
                     if np.random.rand() < 0.1:
                         randomRid = np.random.randint(0, RSU_NUMBER)
-                        while randomRid == self.rid:
-                            randomRid = np.random.randint(0, RSU_NUMBER)
+                        # while randomRid == self.rid: 一个RSU时会出现死循环
+                        randomRid = np.random.randint(0, RSU_NUMBER)
                         input = [vehicle.rid, randomRid]
                         t = vehicle.generate_transaction(self._mean_transaction_size, self._transaction_lamma,
                                                             self._min_transaction_size, self._max_transaction_size, True, input)
@@ -111,7 +111,7 @@ class RSU:
             size += t.size
             new_block.add_transaction(t)
         new_block.set_size(size)
-        gen_latency = size / self.fov.capacity
+        gen_latency = self.fov.generate_block(new_block)
         # 返回生成和发送区块时延
         return new_block, gen_latency
     
@@ -147,6 +147,7 @@ class RSU:
         self.fov.pre_prepare(self.vehicles)
         
         for vehicle in self.vehicles:
+
             if vehicle != self.fov:
                 vehicle.prepare(self.vehicles, self.fov.view_id)
         
@@ -163,6 +164,30 @@ class RSU:
                     self._block_count += 1
                 break
         return latency
+    
+    def check_votes(self, block):
+        votes = []
+        for vehicle in self.vehicles:
+            vote = vehicle.check_transaction(block)
+            # votes长度与block中事务数相同，否则抛出异常
+            if len(vote) != len(block.transactions):
+                raise ValueError("Votes length does not match block transactions length")
+            votes.append(vote)
+        # 有最多相似的投票为结果投票
+        result = max(votes, key=votes.count)
+
+        # 将每辆车的投票与result的余弦相似度作为该车的信誉分数
+        for i, vote in enumerate(votes):
+            # 计算余弦相似度
+            cos_sim = np.dot(vote, result) / (np.linalg.norm(vote) * np.linalg.norm(result))
+            # 计算信誉分数
+            vehicle = self.vehicles[i]
+            #vehicle.reputation += cos_sim
+            if cos_sim >= 0:
+                vehicle.reputation = vehicle.reputation + 0.05 * cos_sim  * (100 - vehicle.reputation)
+            else:
+                vehicle.reputation = vehicle.reputation + 0.5 * cos_sim * (vehicle.reputation + 100)
+
         
                 
         
@@ -190,22 +215,32 @@ class RSU:
 
         # 头车生成新的区块
         # gen_latency为生成区块时延，send_latency为区块内共识时延
-        block, gen_latency = self.generate_block()
-        # 头车生成新的跨分片区块
-        cblock, cgen_latency = self.generateCrossShardBlock()
+        if self.transactions or self.crossShardTransactions:
+            block, gen_latency = self.generate_block()
+            # 头车生成新的跨分片区块
+            cblock, cgen_latency = self.generateCrossShardBlock()
             
 
-        # fov将区块上传到RSU开始共识过程，delivery_latency为上传时延
-        delivery_latency = self.fov.upload_block(block, cblock)
+            # fov将区块上传到RSU开始共识过程，delivery_latency为上传时延
+            delivery_latency = self.fov.upload_block(block, cblock)
 
-        # 区块共识
+            # 区块共识
+            consensus_latency = self.pbft(block, cblock)
+            assert consensus_latency >= 0, "Consensus Failed"
 
-        consensus_latency = self.pbft(block, cblock)
-        assert consensus_latency >= 0, "Consensus Failed"
+            # 计算每个车辆信誉
+            self.check_votes(block)
+        else:
+            block = None
+            cblock = None
+            gen_latency = 0
+            cgen_latency = 0
+            delivery_latency = 0
+            consensus_latency = 0
         
-        if block.transactions:
+        if block and block.transactions:
             self.transaction_mean_size = block.size / len(block.transactions)
-        self._data_size += block.size
+            self._data_size += block.size
          # 当区块未容纳所有事务时，奖励为0
         plently = 0
         if self.transactions:

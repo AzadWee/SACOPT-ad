@@ -1,5 +1,5 @@
 VEHICLE_NUMBER = 15  # 15
-RSU_NUMBER = 3  # 3
+RSU_NUMBER = 1  # 3
 CAPACITY = [60, 80, 100, 120, 140]
 TRANSITION_MATRIX_1 = [[0.1, 0.2, 0.5, 0.1, 0.1],
                         [0.2, 0.1, 0.3, 0.2, 0.2],
@@ -17,7 +17,7 @@ RSU_TRANS_RATE = 100
 
 
 # environment
-MEAN_TRANSACTION_NUM = 3 # 每个step产生的事务数，正态均值，默认10
+MEAN_TRANSACTION_NUM = 3 # 每个step产生的事务数，正态均值，默认3
 
 MEAN_TRANSACTION_SIZE = 12
 TRANSACTION_LAMMA = 0.7

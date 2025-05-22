@@ -23,7 +23,9 @@ class Vehicle:
         self.transrate = 20  # 到rsu传输速率
 
         # 能耗相关
-        self.energyConsumption = 0
+        self.genEnergyConsumption = 0
+        self.upEnergyConsumption = 0
+        self.sendEnergyConsumption = 0
 
         # 安全相关
         self.reputation = 0  # 信誉
@@ -64,28 +66,44 @@ class Vehicle:
     def change_transrate(self, transrate):
         self.transrate = transrate
     
+    def eneragy_consumption(self, size, factor, purpose):
+        # 计算能耗
+        if purpose == 'gen':
+            self.genEnergyConsumption += size * factor
+        elif purpose == 'up':
+            self.upEnergyConsumption += size * factor
+        elif purpose == 'send':
+            self.sendEnergyConsumption += size * factor
+        else:
+            raise ValueError("Invalid purpose for energy consumption calculation")
+        return size * factor
+    
     def generate_transaction(self,t_size, t_lamma, min_size, max_size, isCrossShard=False, input=None):
         
         # 正态分布随机生成事务大小
         random_number = np.random.normal(t_size, t_lamma)
         size = int(np.clip(random_number, min_size, max_size))
+        is_fake = False
+        if self.is_bad:
+            # 一半概率生成虚假事务
+            is_fake = np.random.rand() < 0.5
         if isCrossShard:
-            trans = Transaction(vid=self.vid, input=input, is_fake=False, size=size)
+            trans = Transaction(vid=self.vid, input=input, is_fake=is_fake, size=size)
         else:
-            trans = Transaction(vid=self.vid, input=[self.rid], is_fake=False, size=size)
+            trans = Transaction(vid=self.vid, input=[self.rid], is_fake=is_fake, size=size)
 
         return trans
     
     def generate_block(self, block: Block):
         lantacy = block.size / self.capacity
         # 计算能耗
-        self.energyConsumption += block.size * 0.3
+        self.eneragy_consumption(block.size, 0.3, 'gen')
         return lantacy
 
     def upload_block(self, block: Block, cblock: Block):
         lantacy = (block.size + cblock.size) / self.transrate
         # 计算能耗
-        self.energyConsumption += (block.size + cblock.size) * 0.1
+        self.eneragy_consumption(block.size + cblock.size, 0.1, 'up')
         return lantacy
     
     # 共识相关
@@ -93,6 +111,7 @@ class Vehicle:
         """向其他节点广播消息"""
         for node in nodes:
             node.receive_message(message)
+            self.eneragy_consumption(10, 1, 'send')
         
     def receive_message(self, message):
         if message['view_id'] > self.view_id:
@@ -134,13 +153,36 @@ class Vehicle:
             return True
         else:
             return False
+    
+    # 对区块中交易进行投票
+    def check_transaction(self, block: Block):
+        votes = []
+        # 恶意车辆会有0.8概率相反投票,正常车辆有0.1到概率相反投票
+        if self.is_bad:
+            pro = 0.6
+        else:
+            pro = 0.1
+        for t in block.transactions:
+            rand = np.random.rand()
+            if rand < pro:
+                votes.append(1 if t.is_fake else -1)
+            else:
+                votes.append(1 if not t.is_fake else -1)
+
+        return votes
 
     def reset(self):
         self.is_fov = False
         self.block_chain.clear()
         self.capacity = np.random.choice(CAPACITY)  # 计算能力
         self.transrate = np.random.choice(TRANS_RATE)  # 到rsu传输速率
-        self.reputation = 100  # 声誉
+
+        self.reputation = 0 # 声誉
+
+        # 能耗
+        self.genEnergyConsumption = 0
+        self.upEnergyConsumption = 0
+        self.sendEnergyConsumption = 0
         
         self.messages.clear()
         self.view_id = 0

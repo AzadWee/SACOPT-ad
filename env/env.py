@@ -27,6 +27,7 @@ class OPTEnv(gym.Env):
         self.delay_records = []
         self.data_size_records = []
         self.bad_count_record = 0
+        self.reputation_records = []
 
         # 配置相关
         self.is_save = is_save
@@ -56,6 +57,16 @@ class OPTEnv(gym.Env):
         self.plenty_records.append(manage_info['plenty'])
         self.data_size_records.append(manage_info['data_size'])
         self.bad_count_record = manage_info['bad_count']
+        self.reputation_records = manage_info['reputations']
+
+        if self.global_clock < MAX_STEP and self.is_test:
+            # 将self.reputation_records保存为一个csv文件
+            with open('reputation_records.csv', mode='a+', newline='') as file:
+                writer = csv.writer(file)
+                if self.global_clock == 0:
+                    writer.writerow(['reputation_0', 'reputation_1', 'reputation_2'])
+                writer.writerow(self.reputation_records)
+
         
         self._num_steps += 1
         self.global_clock += 1

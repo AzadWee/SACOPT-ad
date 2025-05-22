@@ -104,7 +104,6 @@ class Manager:
         block_size = (action // BLOCK_INTERVAL_RANGE) % BLOCK_SIZE_RANGE + MIN_BLOCK_SIZE
         block_interval = action % BLOCK_INTERVAL_RANGE + MIN_BLOCK_INTERVAL
 
-
         # print("action:{},{},{}".format(fov_id, block_size, block_interval))
 
         assert MIN_BLOCK_SIZE <= block_size <= MAX_BLOCK_SIZE, \
@@ -112,6 +111,9 @@ class Manager:
         assert MIN_BLOCK_INTERVAL <= block_interval <= MAX_BLOCK_INTERVAL, \
             "Block interval should be in the range of [{}, {}]".format(MIN_BLOCK_INTERVAL, MAX_BLOCK_INTERVAL)
 
+        if global_step > 50:
+            self._vehicles[1].set_bad(True)
+            self._vehicles[2].set_bad(False)
         
         # 随机生成is_generate_mask
         self.is_generate_block()
@@ -138,9 +140,12 @@ class Manager:
         
         # 抽一个rsu统计存储空间消耗
         data_size = self._rsu[0].data_size
+
+        reputations = [self._vehicles[0].reputation, self._vehicles[1].reputation, self._vehicles[2].reputation]
         
         reward = self.calculate_reward_old(throughput, max_delay, block_interval, sum_plenty)
-        print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
+        # print("throughput:{}, delay:{}, interval{}, reward:{}, plently:{}".format(throughput, max_delay, block_interval, reward, sum_plenty))
+        # print("gen:{}, up:{}, send:{}".format(self._vehicles[0].genEnergyConsumption, self._vehicles[0].upEnergyConsumption, self._vehicles[0].sendEnergyConsumption))
 
         self.global_step += 1
 
@@ -149,7 +154,7 @@ class Manager:
             self.transrate_change()
             self.capacity_change()
         
-        info = {'throughput': throughput, 'data_size': data_size,'delay': max_delay, 'plenty': sum_plenty, 'bad_count': self.bad_count}
+        info = {'throughput': throughput, 'data_size': data_size,'delay': max_delay, 'plenty': sum_plenty, 'bad_count': self.bad_count, 'reputations': reputations}
         return reward, info
     
     @property
@@ -164,6 +169,8 @@ class Manager:
         return fov.vid * BLOCK_SIZE_RANGE * BLOCK_INTERVAL_RANGE
 
     def reset(self):
+        # print("gen:{}, up:{}, send:{}".format(self._vehicles[0].genEnergyConsumption, self._vehicles[0].upEnergyConsumption, self._vehicles[0].sendEnergyConsumption))
+        # print("v1:{}, v2:{}, v3:{}".format(self._vehicles[0].reputation, self._vehicles[1].reputation, self._vehicles[2].reputation))
         for v in self._vehicles:
             v.reset()
         for r in self._rsu:
@@ -172,4 +179,5 @@ class Manager:
         self.is_generate_mask = np.zeros(self._n_rsu)
         self.global_step = 0
         self.bad_count = 0
+
         return self.space_vector
