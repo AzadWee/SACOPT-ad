@@ -29,6 +29,9 @@ class Vehicle:
 
         # 安全相关
         self.reputation = 0  # 信誉
+        self.MH = 0  # 累计恶意历史得分
+        
+
         self.block_chain = []
         
         # 安全相关

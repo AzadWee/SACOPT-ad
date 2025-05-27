@@ -35,6 +35,13 @@ THROUGHPUT_COEF = 0.8  # 事务吞吐量系数 1
 LATENCY_COEF = 0.2  # 时延系数 0.5
 PLENTLY_COEF = 1
 
+# 信誉相关参数
+r_crit = 0.1  # 信誉阈值
+c_M = 0.5  # MH累加系数
+cigema_M = 0.98  # MH衰减因子
+k_H = 0.5  # MH的作用强度
+
+
 ACTION_SPACE = VEHICLE_NUMBER//RSU_NUMBER * (MAX_BLOCK_SIZE - MIN_BLOCK_SIZE + 1) * (MAX_BLOCK_INTERVAL - MIN_BLOCK_INTERVAL + 1)
 MAX_STEP = 100  # 1000
 

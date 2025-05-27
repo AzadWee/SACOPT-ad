@@ -14,7 +14,7 @@ class Manager:
         self._vehicles = [Vehicle(vid, vid // self._n_shard) for vid in range(VEHICLE_NUMBER)]
         
         # 添加一个恶意节点
-        self._vehicles[2].set_bad(True)
+        self._vehicles[1].set_bad(True)
         
         self.global_chain = []
         self._rsu = [RSU(rid) for rid in range(RSU_NUMBER)]
@@ -112,8 +112,8 @@ class Manager:
             "Block interval should be in the range of [{}, {}]".format(MIN_BLOCK_INTERVAL, MAX_BLOCK_INTERVAL)
 
         if global_step > 50:
-            self._vehicles[1].set_bad(True)
-            self._vehicles[2].set_bad(False)
+            self._vehicles[2].set_bad(True)
+            self._vehicles[1].set_bad(False)
         
         # 随机生成is_generate_mask
         self.is_generate_block()
@@ -123,6 +123,8 @@ class Manager:
         max_delay = 0
         sum_plenty = 0
         big_block = Block()
+
+            
     
         # 每个RSU(分片)进行操作
         for r in self._rsu:

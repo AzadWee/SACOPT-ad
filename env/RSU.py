@@ -183,8 +183,16 @@ class RSU:
             # 计算信誉分数
             vehicle = self.vehicles[i]
             #vehicle.reputation += cos_sim
+            # 对车辆MH进行衰减
+            vehicle.MH = vehicle.MH * cigema_M
+            # 当r（t）< r_crit,对车辆MH进行累加
+            if cos_sim < r_crit:
+                vehicle.MH = vehicle.MH + c_M * np.abs(cos_sim) 
+
             if cos_sim >= 0:
-                vehicle.reputation = vehicle.reputation + 0.05 * cos_sim  * (100 - vehicle.reputation)
+                # todo 根据车辆历史作恶行为，对alpha进行衰减，但还没启用
+                alpha = 0.05 / (1 + k_H * vehicle.MH)
+                vehicle.reputation = vehicle.reputation + alpha * cos_sim  * (100 - vehicle.reputation)
             else:
                 vehicle.reputation = vehicle.reputation + 0.5 * cos_sim * (vehicle.reputation + 100)
 

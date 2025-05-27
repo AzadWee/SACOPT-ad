@@ -122,7 +122,6 @@ celerybeat.pid
 
 # Environments
 .venv
-env/
 venv/
 ENV/
 env.bak/
@@ -162,3 +161,5 @@ cython_debug/
 log/
 draw/
 .history/
+*.csv
+*.png
